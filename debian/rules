@@ -1,0 +1,44 @@
+#!/usr/bin/make -f
+
+
+# This makes no difference for usual debian/rules invokations, but the
+# get-orig-source target might be called from any directory by policy.
+ PACKAGE_ROOT := $(dir $(realpath $(lastword $(MAKEFILE_LIST))))
+ PACKAGE_ROOT := $(realpath $(PACKAGE_ROOT)/..)
+ VERSION := $(shell cd $(PACKAGE_ROOT) && dpkg-parsechangelog | perl -ne 'print $$1 if m/Version:\s*([\d\.]+)-\d+/')
+
+%:
+	dh $@ --with apache2
+
+override_dh_auto_clean:
+	rm -f mod_geoip.la mod_geoip.lo mod_geoip.slo mod_geoip.o
+	rm -rf .libs
+
+override_dh_auto_build:
+	apxs2 -c -lGeoIP mod_geoip.c
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+
+# Get orig-source and check new upstream version 
+get-orig-source:
+	[ -n "$(VERSION)" ] || exit 1
+	set -e && ( \
+		CURDIR=`pwd` ;\
+		TMPDIR=`mktemp -d` ;\
+		cd $${TMPDIR} ;\
+		wget http://www.maxmind.com/download/geoip/api/mod_geoip2/mod_geoip2-latest.tar.gz ;\
+		LATEST=`tar tf mod_geoip2-latest.tar.gz | head -n1 | cut -d'_' -f3 | sed 's/\///g'` ;\
+		if [ "$(VERSION)" != "$${LATEST}" ] ; then \
+			echo "A new upstream version is available: $${LATEST}" ;\
+		fi ;\
+		if [ -f "$${CURDIR}/libapache2-mod-geoip_$(VERSION).orig.tar.gz" ] ; then\
+			echo "Cannot overwrite libapache2-mod-geoip_$(VERSION).orig.tar.gz: File exists" ;\
+		else\
+			echo "Generating libapache2-mod-geoip_$(VERSION).orig.tar.gz" ;\
+			wget http://www.maxmind.com/download/geoip/api/mod_geoip2/mod_geoip2_$(VERSION).tar.gz ;\
+			mv mod_geoip2_$(VERSION).tar.gz $${CURDIR}/libapache2-mod-geoip_$(VERSION).orig.tar.gz ;\
+		fi ;\
+		rm -rf $${TMPDIR} ;\
+	)
